@@ -1,0 +1,93 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RolUsuario {
+  ADMINISTRADOR
+  ODONTOLOGO
+  RECEPCIONISTA
+  PACIENTE
+}
+
+enum EstadoCita {
+  PROGRAMADA
+  ATENDIDA
+  CANCELADA
+}
+
+model Usuario {
+  id        String     @id @default(uuid())
+  nombre    String
+  apellido  String
+  correo    String     @unique
+  telefono  String?
+  rol       RolUsuario @default(PACIENTE)
+  creadoEn  DateTime   @default(now()) @map("creado_en")
+
+  paciente  Paciente?
+  citas     Cita[]     @relation("OdontologoCitas")
+
+  @@map("usuarios")
+}
+
+model Paciente {
+  id              String    @id @default(uuid())
+  usuarioId       String?   @unique @map("usuario_id")
+  ci              String    @unique
+  fechaNacimiento DateTime  @map("fecha_nacimiento")
+  alergias        String?
+  creadoEn        DateTime  @default(now()) @map("creado_en")
+
+  usuario         Usuario?  @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  citas           Cita[]
+  cobros          Cobro[]
+
+  @@map("pacientes")
+}
+
+model Servicio {
+  id             String  @id @default(uuid())
+  nombreServicio String  @map("nombre_servicio")
+  precioBase     Float   @map("precio_base")
+  descripcion    String?
+
+  @@map("servicios")
+}
+
+model Cita {
+  id           String     @id @default(uuid())
+  pacienteId   String     @map("paciente_id")
+  odontologoId String     @map("odontologo_id")
+  fechaHora    DateTime   @map("fecha_hora")
+  estado       EstadoCita @default(PROGRAMADA)
+  motivo       String?
+
+  paciente     Paciente   @relation(fields: [pacienteId], references: [id], onDelete: Cascade)
+  odontologo   Usuario    @relation("OdontologoCitas", fields: [odontologoId], references: [id], onDelete: Restrict)
+  cobros       Cobro[]
+
+  @@map("citas")
+}
+
+model Cobro {
+  id             String   @id @default(uuid())
+  citaId         String?  @map("cita_id")
+  pacienteId     String   @map("paciente_id")
+  montoTotal     Float    @map("monto_total")
+  montoPagado    Float    @map("monto_pagado")
+  saldoPendiente Float    @map("saldo_pendiente")
+  metodoPago     String   @map("metodo_pago")
+  fechaCobro     DateTime @default(now()) @map("fecha_cobro")
+
+  cita           Cita?    @relation(fields: [citaId], references: [id], onDelete: SetNull)
+  paciente       Paciente @relation(fields: [pacienteId], references: [id], onDelete: Cascade)
+
+  @@map("cobros")
+}

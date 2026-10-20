@@ -1,26 +1,149 @@
 @import "tailwindcss";
 
+/* ==========================================================================
+   DENTAL RUZLY - Sistema de diseño (Tailwind v4)
+   ========================================================================== */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg-main: #090d16;
+  --card-bg: rgba(15, 23, 42, 0.75);
+  --border-color: rgba(51, 65, 85, 0.6);
+  --color-surface-main: #090d16;
+  --color-surface-card: #0f172a;
+  --color-surface-input: #1e293b;
+  --color-border-subtle: #334155;
+  --color-accent: #2563eb;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  body {
+    background-color: var(--bg-main);
+    background-image:
+      radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.12) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(14, 165, 233, 0.08) 0px, transparent 50%);
+    color: #f8fafc;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    min-height: 100vh;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* --------------------------------------------------------------------------
+   Componentes reutilizables
+   -------------------------------------------------------------------------- */
+.glass-panel {
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-color);
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.5),
+    0 8px 10px -6px rgba(0, 0, 0, 0.5);
+}
+
+.input-pro {
+  background-color: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  color: #ffffff;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  transition: all 0.2s ease-in-out;
+}
+
+.input-pro::placeholder {
+  color: #64748b;
+}
+
+.input-pro:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+  background-color: rgba(30, 41, 59, 0.9);
+}
+
+.btn-primary-pro {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.39);
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+}
+
+.btn-primary-pro:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px 0 rgba(37, 99, 235, 0.55);
+}
+
+.btn-primary-pro:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Scrollbar oscura acorde al tema */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* --------------------------------------------------------------------------
+   Estilos de Preimpresión PDF y Reportes
+   -------------------------------------------------------------------------- */
+@media print {
+  @page {
+    margin: 1.2cm;
+    size: letter;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+  }
+
+  header, nav, button, form, input, select, textarea, .no-print {
+    display: none !important;
+  }
+
+  .glass-panel, .bg-\[\#0d1527\], .bg-slate-900, .bg-slate-950, div[class*="bg-"] {
+    background: white !important;
+    border: 1px solid #ccc !important;
+    box-shadow: none !important;
+    color: black !important;
+  }
+
+  h1, h2, h3, h4, p, span, td, th, div, strong {
+    color: black !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  th {
+    border-bottom: 2px solid #000 !important;
+    background-color: #f3f4f6 !important;
+    color: #000 !important;
+  }
+
+  td {
+    border-bottom: 1px solid #e5e7eb !important;
+  }
 }

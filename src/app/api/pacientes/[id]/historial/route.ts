@@ -1,19 +1,26 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { construirHistorial } from '@/lib/expediente';
+import { noAutorizado, prohibido, usuarioAutenticado } from '@/lib/sesion';
 
 /**
  * GET /api/pacientes/[id]/historial
- * Linea de tiempo clinica del paciente, derivada de sus citas, tratamientos
- * y recetas. No existe una tabla "Historial": la historia es la agregacion de
- * los registros clinicos reales.
+ * Línea de tiempo clínica del paciente, derivada de sus citas, tratamientos
+ * y recetas. No existe una tabla "Historial": la historia es la agregación de
+ * los registros clínicos reales.
  */
 export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   try {
+    const user = await usuarioAutenticado();
+    if (!user) return noAutorizado();
+
     const { id } = await context.params;
+
+    // El paciente solo puede abrir su propia historia clínica.
+    if (user.rol === 'PACIENTE' && user.pacienteId !== id) return prohibido();
 
     const paciente = await prisma.paciente.findUnique({
       where: { id },
@@ -38,7 +45,7 @@ export async function GET(
   } catch (error) {
     console.error('Error en GET /api/pacientes/[id]/historial:', error);
     return NextResponse.json(
-      { error: 'Error al obtener el historial clinico' },
+      { error: 'Error al obtener el historial clínico' },
       { status: 500 },
     );
   }

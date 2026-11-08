@@ -1,30 +1,25 @@
-datasource db {
-  provider = "postgresql"
-}
-
 generator client {
   provider = "prisma-client-js"
 }
 
-enum Rol {
-  ADMINISTRADOR
-  ODONTOLOGO
-  RECEPCIONISTA
-  PACIENTE
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Usuario {
-  id         String    @id @default(cuid())
-  username   String    @unique
-  password   String
-  nombre     String
-  email      String?   @unique
-  rol        Rol       @default(PACIENTE)
-  activo     Boolean   @default(true)
-  pacienteId String?   @unique
-  paciente   Paciente? @relation(fields: [pacienteId], references: [id], onDelete: SetNull)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  username            String    @unique
+  password            String
+  nombre              String
+  email               String?   @unique
+  rol                 Rol       @default(PACIENTE)
+  activo              Boolean   @default(false)
+  pacienteId          String?   @unique
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  pendienteAprobacion Boolean   @default(true)
+  paciente            Paciente? @relation(fields: [pacienteId], references: [id])
 }
 
 model Paciente {
@@ -38,13 +33,13 @@ model Paciente {
   activo       Boolean       @default(true)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
-  usuario      Usuario?
   citas        Cita[]
-  tratamientos Tratamiento[]
-  recetas      Receta[]
-  fotos        FotoClinica[]
   cobros       Cobro[]
+  fotos        FotoClinica[]
   odontogramas Odontograma[]
+  recetas      Receta[]
+  tratamientos Tratamiento[]
+  usuario      Usuario?
 }
 
 model Cita {
@@ -54,20 +49,20 @@ model Cita {
   motivo     String?
   estado     String   @default("PENDIENTE")
   pacienteId String
-  paciente   Paciente @relation(fields: [pacienteId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
+  paciente   Paciente @relation(fields: [pacienteId], references: [id], onDelete: Cascade)
 }
 
 model Tratamiento {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   nombre      String
   descripcion String?
   costo       Float
-  pagado      Float    @default(0.0)
-  activo      Boolean  @default(true)
+  pagado      Float     @default(0.0)
+  activo      Boolean   @default(true)
   pacienteId  String?
-  paciente    Paciente? @relation(fields: [pacienteId], references: [id], onDelete: SetNull)
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
+  paciente    Paciente? @relation(fields: [pacienteId], references: [id])
 }
 
 model Receta {
@@ -76,6 +71,7 @@ model Receta {
   pacienteNombre String?
   medicamento    String
   indicaciones   String
+  emitidaPor     String?
   createdAt      DateTime  @default(now())
   paciente       Paciente? @relation(fields: [pacienteId], references: [id])
 }
@@ -85,8 +81,8 @@ model FotoClinica {
   url         String
   descripcion String?
   pacienteId  String?
-  paciente    Paciente? @relation(fields: [pacienteId], references: [id], onDelete: SetNull)
   createdAt   DateTime  @default(now())
+  paciente    Paciente? @relation(fields: [pacienteId], references: [id])
 }
 
 model Cobro {
@@ -97,8 +93,8 @@ model Cobro {
   saldo          Float
   metodo         String    @default("EFECTIVO")
   pacienteId     String?
-  paciente       Paciente? @relation(fields: [pacienteId], references: [id], onDelete: SetNull)
   createdAt      DateTime  @default(now())
+  paciente       Paciente? @relation(fields: [pacienteId], references: [id])
 }
 
 model Odontograma {
@@ -108,6 +104,13 @@ model Odontograma {
   estado      String   @default("DIAGNÓSTICO")
   observacion String?
   pacienteId  String
-  paciente    Paciente @relation(fields: [pacienteId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
+  paciente    Paciente @relation(fields: [pacienteId], references: [id], onDelete: Cascade)
+}
+
+enum Rol {
+  ADMINISTRADOR
+  ODONTOLOGO
+  RECEPCIONISTA
+  PACIENTE
 }

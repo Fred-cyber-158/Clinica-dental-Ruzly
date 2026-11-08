@@ -1,520 +1,549 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { guardarSesion } from '@/lib/sesion-cliente';
 
-interface RolPerfil {
-  id: string;
-  nombrePerfil: string;
-  rol: 'ADMINISTRADOR' | 'ODONTOLOGO' | 'RECEPCIONISTA' | 'PACIENTE';
-  emailAsociado: string;
-  avatar: string;
-  descripcion: string;
-}
+type Rol = 'ADMINISTRADOR' | 'ODONTOLOGO' | 'RECEPCIONISTA' | 'PACIENTE';
+
+// Iconos SVG inline optimizados para rendimiento
+const EyeIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+);
+const EyeOffIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+);
 
 export default function LoginPage() {
   const router = useRouter();
   const [modo, setModo] = useState<'LOGIN' | 'REGISTER' | 'RESET'>('LOGIN');
+  const [rolSeleccionado, setRolSeleccionado] = useState<Rol | ''>('');
 
-  // Campos de Formulario
-  const [nombre, setNombre] = useState('');
-  const [email, setEmail] = useState('');
+  // Campos Login
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [rolSeleccionado, setRolSeleccionado] = useState<RolPerfil | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
-  // Estados de control y alertas
+  // Campos Registro
+  const [nombre, setNombre] = useState('');
+  const [regUsername, setRegUsername] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [showRegPassword, setShowRegPassword] = useState(false);
+  const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
+
+  // Campo Reset
+  const [resetEmail, setResetEmail] = useState('');
+
+  // Estados de control
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [errores, setErrores] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
-  // Modales
-  const [showRolesModal, setShowRolesModal] = useState(false);
-  const [showGoogleModal, setShowGoogleModal] = useState(false);
+  // ✅ Validación estricta sincronizada con el backend
+  const validarCampo = (campo: string, valor: string) => {
+    switch (campo) {
+      case 'nombre':
+        if (!valor.trim()) return 'El nombre es obligatorio.';
+        if (valor.trim().length < 3) return 'Mínimo 3 caracteres.';
+        if (!/^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ' .\-]+$/.test(valor)) return 'Solo letras, espacios y guiones.';
+        return '';
+      case 'regUsername':
+        if (!valor.trim()) return 'El usuario es obligatorio.';
+        if (!/^[a-z0-9_]{3,20}$/.test(valor)) return '3-20 caracteres, solo minúsculas, números y _.';
+        return '';
+      case 'regEmail':
+        if (valor && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(valor)) return 'Formato de correo no válido.';
+        return '';
+      case 'regPassword':
+        if (!valor) return 'La contraseña es obligatoria.';
+        if (!/^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(valor)) {
+          return 'Mín. 8 caracteres, 1 mayúscula, 1 número y 1 carácter especial (@, $, !, etc.).';
+        }
+        return '';
+      case 'regConfirmPassword':
+        if (valor !== regPassword) return 'Las contraseñas no coinciden.';
+        return '';
+      case 'resetEmail':
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(valor)) return 'Formato de correo no válido.';
+        return '';
+      default:
+        return '';
+    }
+  };
 
-  // Perfiles / Roles del Sistema
-  const perfilesDisponibles: RolPerfil[] = [
-    {
-      id: 'admin',
-      nombrePerfil: 'ADMINISTRADOR GENERAL',
-      rol: 'ADMINISTRADOR',
-      emailAsociado: 'admin@ruzly.com',
-      avatar: 'A',
-      descripcion: 'Control total del sistema, usuarios, precios y reportes gerenciales',
-    },
-    {
-      id: 'odontologo',
-      nombrePerfil: 'ODONTÓLOGO ESPECIALISTA',
-      rol: 'ODONTOLOGO',
-      emailAsociado: 'odontologo@ruzly.com',
-      avatar: 'O',
-      descripcion: 'Odontograma interactivo, cuaderno digital y recetario médico',
-    },
-    {
-      id: 'recepcion',
-      nombrePerfil: 'RECEPCIÓN Y CAJA',
-      rol: 'RECEPCIONISTA',
-      emailAsociado: 'recepcion@ruzly.com',
-      avatar: 'R',
-      descripcion: 'Agendamiento de citas, registro de pacientes y cobros en caja',
-    },
-    {
-      id: 'paciente',
-      nombrePerfil: 'PACIENTE REGISTRADO',
-      rol: 'PACIENTE',
-      emailAsociado: 'finconflr@gmail.com',
-      avatar: 'P',
-      descripcion: 'Consulta personal de citas programadas e historial de pagos',
-    },
-  ];
-
-  const esEmailValido = (correo: string) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.trim());
+  const handleBlur = (campo: string, valor: string) => {
+    setTouched((prev) => ({ ...prev, [campo]: true }));
+    const error = validarCampo(campo, valor);
+    setErrores((prev) => ({ ...prev, [campo]: error }));
   };
 
   const esLoginValido = useMemo(() => {
-    return email.trim().length >= 3 && password.trim().length >= 1;
-  }, [email, password]);
+    return rolSeleccionado !== '' && username.trim().length >= 2 && password.trim().length >= 1;
+  }, [rolSeleccionado, username, password]);
 
   const esRegistroValido = useMemo(() => {
     return (
       nombre.trim().length >= 3 &&
-      esEmailValido(email) &&
-      password.trim().length >= 6 &&
-      password === confirmPassword
+      /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ' .\-]+$/.test(nombre.trim()) &&
+      /^[a-z0-9_]{3,20}$/.test(regUsername.trim()) &&
+      /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(regPassword) &&
+      regPassword === regConfirmPassword &&
+      (regEmail === '' || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(regEmail))
     );
-  }, [nombre, email, password, confirmPassword]);
+  }, [nombre, regUsername, regPassword, regConfirmPassword, regEmail]);
 
-  // Validar y procesar el inicio de sesión
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
 
     if (!esLoginValido) {
-      setErrorMsg('Por favor, ingrese un correo y contraseña válidos.');
+      setErrorMsg('Por favor, complete todos los campos obligatorios correctamente.');
       return;
     }
 
     setLoading(true);
-
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: email.trim().toLowerCase(),
-          password: password.trim(),
-        }),
+        body: JSON.stringify({ username: username.trim(), password: password.trim() }),
       });
-
       const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Credenciales incorrectas. Verifique su correo o contraseña.');
+      if (!res.ok) throw new Error(data.error || 'Credenciales incorrectas.');
+      
+      // ✅ Verificación de seguridad frontend adicional
+      if (data.rol !== rolSeleccionado) {
+        throw new Error(`Acceso denegado: Su rol asignado es ${data.rol}, no ${rolSeleccionado}.`);
       }
 
-      const usuarioSesion = {
-        ...data,
-        rol: rolSeleccionado ? rolSeleccionado.rol : data.rol,
-      };
-
-      localStorage.setItem('usuario_activo', JSON.stringify(usuarioSesion));
-      setSuccessMsg(`¡Bienvenido ${usuarioSesion.nombre}! ROL: ${usuarioSesion.rol}. Redirigiendo...`);
-
-      setTimeout(() => {
-        router.push('/');
-        router.refresh();
+      guardarSesion({ id: data.id, nombre: data.nombre, username: data.username, email: data.email, rol: data.rol });
+      setSuccessMsg(`✅ ¡Bienvenido, ${data.nombre}! Redirigiendo...`);
+      
+      // Pequeño delay para que el usuario vea el mensaje de éxito
+      setTimeout(() => { 
+        router.push('/'); 
+        router.refresh(); 
       }, 800);
     } catch (err: unknown) {
-      const error = err as Error;
-      setErrorMsg(error.message);
+      setErrorMsg((err as Error).message);
     } finally {
       setLoading(false);
     }
   };
 
-  // Selección de Perfil / Rol
-  const seleccionarPerfilRol = (perfil: RolPerfil) => {
-    setShowRolesModal(false);
-    setRolSeleccionado(perfil);
-    setEmail(perfil.emailAsociado);
-    setErrorMsg(null);
-    setSuccessMsg(`Perfil seleccionado: ${perfil.nombrePerfil}. Ingrese su contraseña.`);
-  };
-
-  // Login Inmediato por Google
-  const seleccionarCuentaGoogle = (correoGoogle: string) => {
-    setShowGoogleModal(false);
-    setLoading(true);
-
-    setTimeout(() => {
-      const rolFinal = rolSeleccionado ? rolSeleccionado.rol : 'ADMINISTRADOR';
-      const nombreFinal = rolSeleccionado ? rolSeleccionado.nombrePerfil : 'FREDDY LEDEZMA ROSAS';
-
-      const usuarioGoogle = {
-        nombre: nombreFinal,
-        username: correoGoogle,
-        email: correoGoogle,
-        rol: rolFinal,
-      };
-
-      localStorage.setItem('usuario_activo', JSON.stringify(usuarioGoogle));
-      setSuccessMsg(`¡Sesión iniciada con Google (${correoGoogle})! ROL: ${rolFinal}. Redirigiendo...`);
-
-      setTimeout(() => {
-        router.push('/');
-        router.refresh();
-      }, 800);
-    }, 400);
-  };
-
-  // Restablecer Contraseña
-  const handleResetPassword = async (e: React.FormEvent) => {
+  const handleRegistro = async (e: FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    if (!esEmailValido(email)) {
-      setErrorMsg('Ingrese un correo electrónico válido.');
+    const nuevosErrores: Record<string, string> = {};
+    ['nombre', 'regUsername', 'regEmail', 'regPassword', 'regConfirmPassword'].forEach((campo) => {
+      const valor = campo === 'nombre' ? nombre : campo === 'regUsername' ? regUsername : campo === 'regEmail' ? regEmail : campo === 'regPassword' ? regPassword : regConfirmPassword;
+      const error = validarCampo(campo, valor);
+      if (error) nuevosErrores[campo] = error;
+    });
+
+    if (Object.keys(nuevosErrores).length > 0) {
+      setErrores(nuevosErrores);
+      setTouched({ nombre: true, regUsername: true, regEmail: true, regPassword: true, regConfirmPassword: true });
+      setErrorMsg('Por favor, corrija los errores marcados antes de continuar.');
       return;
     }
 
     setLoading(true);
-
     try {
-      const res = await fetch('/api/auth/reset-password', {
+      const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+        body: JSON.stringify({
+          nombre: nombre.trim().toUpperCase(),
+          username: regUsername.trim().toLowerCase(),
+          password: regPassword.trim(),
+          email: regEmail.trim().toLowerCase() || null,
+          rol: 'PACIENTE', // ✅ El backend también lo fuerza, pero es bueno enviarlo
+        }),
       });
-
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al procesar la solicitud.');
+      if (!res.ok) throw new Error(data.error || 'Error al registrar.');
 
-      setSuccessMsg(`✅ Instrucciones enviadas al correo: ${email}`);
+      setSuccessMsg('✅ ¡Registro exitoso! Su cuenta está PENDIENTE DE APROBACIÓN por el administrador.');
+      setNombre(''); setRegUsername(''); setRegPassword(''); setRegConfirmPassword(''); setRegEmail('');
+      setTouched({}); setErrores({});
+      
+      setTimeout(() => { setModo('LOGIN'); setSuccessMsg(null); }, 4000);
     } catch (err: unknown) {
-      const error = err as Error;
-      setErrorMsg(error.message);
+      setErrorMsg((err as Error).message);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleResetPassword = async (e: FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    const error = validarCampo('resetEmail', resetEmail);
+    if (error) {
+      setErrores({ resetEmail: error });
+      setTouched({ resetEmail: true });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail.trim().toLowerCase() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al procesar la solicitud.');
+
+      setSuccessMsg(`✅ Instrucciones enviadas al correo: ${resetEmail}`);
+      setResetEmail('');
+      setTouched({});
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cambiarModo = (nuevoModo: 'LOGIN' | 'REGISTER' | 'RESET') => {
+    setModo(nuevoModo);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setErrores({});
+    setTouched({});
+  };
+
+  // ✅ Función de clases de input optimizada para accesibilidad y estética Refero
+  const getInputClass = (campo: string, tieneValor: boolean) => {
+    const base = "w-full bg-slate-950/50 border rounded-xl px-4 py-3 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 transition-all duration-200 ";
+    if (touched[campo] && errores[campo]) return base + "border-red-500/50 focus:border-red-500 focus:ring-red-500/20 bg-red-500/5";
+    if (touched[campo] && !errores[campo] && tieneValor) return base + "border-emerald-500/50 focus:border-emerald-500 focus:ring-emerald-500/20 bg-emerald-500/5";
+    return base + "border-slate-800 focus:border-blue-500 focus:ring-blue-500/20 hover:border-slate-700";
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-950 font-sans relative">
-      <div className="w-full max-w-md bg-[#0d1527] p-8 rounded-2xl space-y-6 shadow-2xl border border-slate-800">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-950 font-sans selection:bg-blue-500/30">
+      <div className="w-full max-w-md bg-slate-900/60 backdrop-blur-xl p-8 rounded-3xl space-y-6 shadow-2xl shadow-black/50 border border-slate-800/60 animate-in fade-in slide-in-from-bottom-4 duration-500">
         
-        {/* Logo de la Clínica Dental Ruzly */}
-        <div className="text-center space-y-2">
-          <div className="flex justify-center items-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img 
-              src="/logo.png" 
-              alt="Logo Clínica Dental Ruzly" 
-              className="h-16 w-auto object-contain"
-              onError={(e) => {
-                (e.target as HTMLElement).style.display = 'none';
-                const fallback = document.getElementById('login-logo-fallback');
-                if (fallback) fallback.style.display = 'flex';
-              }}
-            />
-            <div 
-              id="login-logo-fallback" 
-              className="hidden w-12 h-12 rounded-xl bg-linear-to-tr from-blue-600 to-cyan-400 mx-auto items-center justify-center text-white font-black text-2xl shadow-lg shadow-blue-500/20"
-            >
-              R
+        {/* ✅ LOGO INTEGRADO CON FALLBACK ELEGANTE */}
+        <div className="text-center space-y-3">
+          <div className="w-20 h-20 mx-auto mb-2 relative group">
+            {/* Efecto de brillo detrás del logo */}
+            <div className="absolute inset-0 bg-linear-to-tr from-blue-600 to-cyan-400 rounded-2xl blur-lg opacity-50 group-hover:opacity-75 transition-opacity"></div>
+            
+            <div className="relative w-full h-full rounded-2xl bg-white p-2 shadow-xl flex items-center justify-center overflow-hidden">
+              {/* Imagen del logo (se oculta si falla la carga) */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img 
+                src="/logo.png" 
+                alt="Clínica Dental Ruzly" 
+                className="w-full h-full object-contain z-10 relative"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+              {/* Fallback: Muestra la "R" estilizada si la imagen no carga o está cargando */}
+              <div className="absolute inset-0 z-0 flex items-center justify-center bg-linear-to-tr from-blue-600 to-cyan-400 text-white font-black text-3xl rounded-xl">
+                R
+              </div>
             </div>
           </div>
-          <h1 className="text-2xl font-black text-white uppercase tracking-tight mt-1">CLÍNICA DENTAL RUZLY</h1>
-          <p className="text-xs text-slate-400 uppercase font-semibold">Acceso al Sistema de Gestión Integral</p>
+          
+          <div>
+            <h1 className="text-xl font-black text-white uppercase tracking-tight">Clínica Dental Ruzly</h1>
+            <p className="text-xs text-slate-400 uppercase font-semibold tracking-wider mt-1">Sistema de Gestión Integral</p>
+          </div>
         </div>
 
-        {/* Tabs Navegación */}
+        {/* Notificaciones Globales */}
+        {errorMsg && (
+          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs font-medium text-center flex items-center justify-center gap-2 animate-in fade-in slide-in-from-top-2">
+            <span>⚠️</span> {errorMsg}
+          </div>
+        )}
+        {successMsg && (
+          <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-medium text-center flex items-center justify-center gap-2 animate-in fade-in slide-in-from-top-2">
+            <span>✅</span> {successMsg}
+          </div>
+        )}
+
+        {/* Tabs de Navegación */}
         <div className="flex border-b border-slate-800 text-xs font-bold text-center">
-          <button
-            type="button"
-            onClick={() => { setModo('LOGIN'); setErrorMsg(null); setSuccessMsg(null); }}
-            className={`flex-1 pb-2 uppercase transition-colors cursor-pointer ${
-              modo === 'LOGIN' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-500 hover:text-slate-300'
-            }`}
+          <button 
+            type="button" 
+            onClick={() => cambiarModo('LOGIN')} 
+            className={`flex-1 pb-3 uppercase tracking-wider transition-all duration-200 cursor-pointer ${modo === 'LOGIN' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-500 hover:text-slate-300'}`}
           >
             Ingresar
           </button>
-          <button
-            type="button"
-            onClick={() => { setModo('REGISTER'); setErrorMsg(null); setSuccessMsg(null); }}
-            className={`flex-1 pb-2 uppercase transition-colors cursor-pointer ${
-              modo === 'REGISTER' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-500 hover:text-slate-300'
-            }`}
+          <button 
+            type="button" 
+            onClick={() => cambiarModo('REGISTER')} 
+            className={`flex-1 pb-3 uppercase tracking-wider transition-all duration-200 cursor-pointer ${modo === 'REGISTER' ? 'text-emerald-400 border-b-2 border-emerald-400' : 'text-slate-500 hover:text-slate-300'}`}
           >
             Registrarse
           </button>
         </div>
 
-        {/* Notificaciones de Alertas en Pantalla */}
-        {errorMsg && (
-          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs font-semibold text-center uppercase">
-            ⚠️ {errorMsg}
-          </div>
-        )}
-        {successMsg && (
-          <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs font-semibold text-center uppercase">
-            {successMsg}
-          </div>
-        )}
-
-        {/* SELECCIÓN DE PERFIL Y GOOGLE */}
-        {modo !== 'RESET' && (
-          <div className="space-y-2">
-            <button
-              type="button"
-              onClick={() => setShowRolesModal(true)}
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 font-bold py-2.5 rounded-xl text-xs uppercase cursor-pointer transition-all shadow-md"
-            >
-              🔑 {rolSeleccionado ? `Perfil: ${rolSeleccionado.nombrePerfil}` : '1. Seleccionar Perfil / Rol de Acceso'}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowGoogleModal(true)}
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-3 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-white font-semibold py-2.5 rounded-xl text-xs uppercase cursor-pointer shadow transition-all"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-              </svg>
-              Continuar con Google
-            </button>
-
-            <div className="flex items-center gap-2 my-2">
-              <div className="flex-1 border-t border-slate-800"></div>
-              <span className="text-[10px] text-slate-500 uppercase">o con tu correo y contraseña</span>
-              <div className="flex-1 border-t border-slate-800"></div>
-            </div>
-          </div>
-        )}
-
-        {/* MODO 1: INICIAR SESIÓN (FORMULARIO MANUAL) */}
+        {/* ========================================== */}
+        {/* MODO 1: INICIAR SESIÓN */}
+        {/* ========================================== */}
         {modo === 'LOGIN' && (
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs text-slate-400 mb-1 font-semibold">Correo Electrónico *</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="finconflr@gmail.com"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-blue-500 lowercase"
+              <label htmlFor="rol" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Seleccione su Rol <span className="text-red-500">*</span></label>
+              <select 
+                id="rol"
+                value={rolSeleccionado} 
+                onChange={(e) => setRolSeleccionado(e.target.value as Rol)} 
+                className="w-full bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 uppercase cursor-pointer hover:border-slate-700"
+              >
+                <option value="">-- SELECCIONE UN ROL --</option>
+                <option value="ADMINISTRADOR">ADMINISTRADOR</option>
+                <option value="ODONTOLOGO">ODONTÓLOGO</option>
+                <option value="RECEPCIONISTA">RECEPCIONISTA</option>
+                <option value="PACIENTE">PACIENTE</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="username" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Usuario o Correo <span className="text-red-500">*</span></label>
+              <input 
+                id="username"
+                type="text" 
+                value={username} 
+                onChange={(e) => setUsername(e.target.value)} 
+                placeholder="mlopez o maria@ruzly.com" 
+                className="w-full bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 hover:border-slate-700" 
+                autoComplete="username" 
               />
             </div>
 
             <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-xs text-slate-400 font-semibold">Contraseña *</label>
-                <button
-                  type="button"
-                  onClick={() => { setModo('RESET'); setErrorMsg(null); setSuccessMsg(null); }}
-                  className="text-[10px] text-blue-400 hover:underline uppercase cursor-pointer"
+              <div className="flex justify-between items-center mb-1.5">
+                <label htmlFor="password" className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Contraseña <span className="text-red-500">*</span></label>
+                <button type="button" onClick={() => cambiarModo('RESET')} className="text-[11px] text-blue-400 hover:text-blue-300 hover:underline uppercase font-semibold transition-colors cursor-pointer">¿Olvidaste tu contraseña?</button>
+              </div>
+              <div className="relative">
+                <input 
+                  id="password"
+                  type={showPassword ? "text" : "password"} 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)} 
+                  placeholder="••••••••" 
+                  className="w-full bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 pr-12 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 hover:border-slate-700" 
+                  autoComplete="current-password" 
+                />
+                <button 
+                  type="button" 
+                  onClick={() => setShowPassword(!showPassword)} 
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-200 transition-colors p-1"
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                 >
-                  ¿Olvidaste tu contraseña?
+                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                 </button>
               </div>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-blue-500"
-              />
             </div>
 
-            <button
-              type="submit"
-              disabled={!esLoginValido || loading}
-              className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white font-bold py-3 rounded-xl text-xs uppercase shadow-lg transition-colors cursor-pointer"
+            <button 
+              type="submit" 
+              disabled={!esLoginValido || loading} 
+              className="w-full bg-blue-600 hover:bg-blue-500 active:scale-[0.98] disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl text-sm uppercase tracking-wider shadow-lg shadow-blue-900/20 transition-all duration-200 cursor-pointer mt-2"
             >
-              {loading ? 'Verificando Acceso...' : 'Ingresar al Sistema'}
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                  Verificando...
+                </span>
+              ) : 'Ingresar al Sistema'}
             </button>
           </form>
         )}
 
-        {/* MODO 2: REGISTRARSE */}
+        {/* ========================================== */}
+        {/* MODO 2: REGISTRARSE (Solo Pacientes) */}
+        {/* ========================================== */}
         {modo === 'REGISTER' && (
-          <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
+          <form onSubmit={handleRegistro} className="space-y-4">
+            <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-300 text-xs font-medium flex items-start gap-2">
+              <span className="mt-0.5">ℹ️</span>
+              <span>El registro público está habilitado exclusivamente para <strong>PACIENTES</strong>. El personal clínico es registrado directamente por el administrador.</span>
+            </div>
+
             <div>
-              <label className="block text-xs text-slate-400 mb-1 font-semibold">Nombre Completo *</label>
+              <label htmlFor="nombre" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Nombre Completo <span className="text-red-500">*</span></label>
               <input
+                id="nombre"
                 type="text"
                 value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                placeholder="EJ: CARLOS PÉREZ"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white uppercase"
+                onChange={(e) => setNombre(e.target.value.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ' .\-]/g, '').toUpperCase())}
+                onBlur={(e) => handleBlur('nombre', e.target.value)}
+                placeholder="Ej: María Fernanda López"
+                maxLength={80}
+                aria-invalid={!!(touched.nombre && errores.nombre)}
+                aria-describedby={errores.nombre ? "error-nombre" : undefined}
+                className={getInputClass('nombre', nombre.length > 0)}
               />
+              {touched.nombre && errores.nombre && <p id="error-nombre" className="text-[11px] text-red-400 mt-1.5 font-medium flex items-center gap-1">⚠️ {errores.nombre}</p>}
             </div>
 
             <div>
-              <label className="block text-xs text-slate-400 mb-1 font-semibold">Correo Electrónico *</label>
+              <label htmlFor="regUsername" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Nombre de Usuario <span className="text-red-500">*</span></label>
               <input
+                id="regUsername"
+                type="text"
+                value={regUsername}
+                onChange={(e) => setRegUsername(e.target.value.replace(/[^a-z0-9_]/g, '').toLowerCase())}
+                onBlur={(e) => handleBlur('regUsername', e.target.value)}
+                placeholder="Ej: mlopez"
+                maxLength={20}
+                aria-invalid={!!(touched.regUsername && errores.regUsername)}
+                aria-describedby={errores.regUsername ? "error-regUsername" : undefined}
+                className={getInputClass('regUsername', regUsername.length > 0)}
+              />
+              {touched.regUsername && errores.regUsername && <p id="error-regUsername" className="text-[11px] text-red-400 mt-1.5 font-medium flex items-center gap-1">️ {errores.regUsername}</p>}
+            </div>
+
+            <div>
+              <label htmlFor="regEmail" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Correo Electrónico <span className="text-slate-600 font-normal normal-case">(Opcional)</span></label>
+              <input
+                id="regEmail"
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="tu_correo@gmail.com"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white lowercase"
+                value={regEmail}
+                onChange={(e) => setRegEmail(e.target.value.replace(/\s/g, '').toLowerCase())}
+                onBlur={(e) => handleBlur('regEmail', e.target.value)}
+                placeholder="Ej: maria.lopez@gmail.com"
+                maxLength={100}
+                aria-invalid={!!(touched.regEmail && errores.regEmail)}
+                aria-describedby={errores.regEmail ? "error-regEmail" : undefined}
+                className={getInputClass('regEmail', regEmail.length > 0)}
               />
+              {touched.regEmail && errores.regEmail && <p id="error-regEmail" className="text-[11px] text-red-400 mt-1.5 font-medium flex items-center gap-1">️ {errores.regEmail}</p>}
             </div>
 
-            <div>
-              <label className="block text-xs text-slate-400 mb-1 font-semibold">Contraseña (Mín. 6 caracteres) *</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="regPassword" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Contraseña <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <input
+                    id="regPassword"
+                    type={showRegPassword ? "text" : "password"}
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    onBlur={(e) => handleBlur('regPassword', e.target.value)}
+                    placeholder="Mín. 8 caracteres"
+                    maxLength={100}
+                    aria-invalid={!!(touched.regPassword && errores.regPassword)}
+                    aria-describedby={errores.regPassword ? "error-regPassword" : undefined}
+                    className={`${getInputClass('regPassword', regPassword.length > 0)} pr-10`}
+                  />
+                  <button type="button" onClick={() => setShowRegPassword(!showRegPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-200 transition-colors p-1" aria-label="Mostrar contraseña">
+                    {showRegPassword ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
+                </div>
+                {touched.regPassword && errores.regPassword && <p id="error-regPassword" className="text-[11px] text-red-400 mt-1.5 font-medium flex items-center gap-1">⚠️ {errores.regPassword}</p>}
+              </div>
+              <div>
+                <label htmlFor="regConfirmPassword" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Confirmar <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <input
+                    id="regConfirmPassword"
+                    type={showRegConfirmPassword ? "text" : "password"}
+                    value={regConfirmPassword}
+                    onChange={(e) => setRegConfirmPassword(e.target.value)}
+                    onBlur={(e) => handleBlur('regConfirmPassword', e.target.value)}
+                    placeholder="Repetir"
+                    maxLength={100}
+                    aria-invalid={!!(touched.regConfirmPassword && errores.regConfirmPassword)}
+                    aria-describedby={errores.regConfirmPassword ? "error-regConfirmPassword" : undefined}
+                    className={`${getInputClass('regConfirmPassword', regConfirmPassword.length > 0)} pr-10`}
+                  />
+                  <button type="button" onClick={() => setShowRegConfirmPassword(!showRegConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-200 transition-colors p-1" aria-label="Mostrar contraseña">
+                    {showRegConfirmPassword ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
+                </div>
+                {touched.regConfirmPassword && errores.regConfirmPassword && <p id="error-regConfirmPassword" className="text-[11px] text-red-400 mt-1.5 font-medium flex items-center gap-1">⚠️ {errores.regConfirmPassword}</p>}
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs text-slate-400 mb-1 font-semibold">Confirmar Contraseña *</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={!esRegistroValido || loading}
-              className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 text-white font-bold py-3 rounded-xl text-xs uppercase shadow-lg transition-colors cursor-pointer"
+            <button 
+              type="submit" 
+              disabled={!esRegistroValido || loading} 
+              className="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl text-sm uppercase tracking-wider shadow-lg shadow-emerald-900/20 transition-all duration-200 cursor-pointer mt-2"
             >
-              {loading ? 'Creando cuenta...' : 'Crear Mi Cuenta'}
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                  Registrando...
+                </span>
+              ) : 'Crear Cuenta de Paciente'}
             </button>
           </form>
         )}
 
+        {/* ========================================== */}
         {/* MODO 3: RESTABLECER CONTRASEÑA */}
+        {/* ========================================== */}
         {modo === 'RESET' && (
           <form onSubmit={handleResetPassword} className="space-y-4">
-            <p className="text-xs text-slate-300">
-              Ingresa tu correo electrónico registrado para enviarte las instrucciones de recuperación:
-            </p>
+            <p className="text-sm text-slate-300 leading-relaxed">Ingresa tu correo electrónico registrado para recibir las instrucciones de recuperación de contraseña:</p>
             <div>
-              <label className="block text-xs text-slate-400 mb-1 font-semibold">Correo Electrónico *</label>
+              <label htmlFor="resetEmail" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Correo Electrónico <span className="text-red-500">*</span></label>
               <input
+                id="resetEmail"
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="finconflr@gmail.com"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white lowercase"
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value.replace(/\s/g, '').toLowerCase())}
+                onBlur={(e) => handleBlur('resetEmail', e.target.value)}
+                placeholder="Ej: maria.lopez@gmail.com"
+                aria-invalid={!!(touched.resetEmail && errores.resetEmail)}
+                aria-describedby={errores.resetEmail ? "error-resetEmail" : undefined}
+                className={getInputClass('resetEmail', resetEmail.length > 0)}
               />
+              {touched.resetEmail && errores.resetEmail && <p id="error-resetEmail" className="text-[11px] text-red-400 mt-1.5 font-medium flex items-center gap-1">️ {errores.resetEmail}</p>}
             </div>
-
-            <button
-              type="submit"
-              disabled={loading || !esEmailValido(email)}
-              className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-xl text-xs uppercase cursor-pointer"
+            <button 
+              type="submit" 
+              disabled={loading || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(resetEmail)} 
+              className="w-full bg-purple-600 hover:bg-purple-500 active:scale-[0.98] disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl text-sm uppercase tracking-wider shadow-lg shadow-purple-900/20 transition-all duration-200 cursor-pointer mt-2"
             >
-              {loading ? 'Enviando...' : 'Enviar Enlace de Recuperación'}
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                  Enviando...
+                </span>
+              ) : 'Enviar Enlace de Recuperación'}
             </button>
-
-            <button
-              type="button"
-              onClick={() => { setModo('LOGIN'); setErrorMsg(null); setSuccessMsg(null); }}
-              className="w-full text-xs text-slate-400 hover:text-white uppercase font-semibold text-center block cursor-pointer"
+            <button 
+              type="button" 
+              onClick={() => cambiarModo('LOGIN')} 
+              className="w-full text-xs text-slate-400 hover:text-white uppercase font-semibold text-center block cursor-pointer transition-colors py-2 hover:bg-slate-800/50 rounded-lg"
             >
               ← Volver al Inicio de Sesión
             </button>
           </form>
         )}
 
+        {/* Enlace inferior de cambio de modo */}
+        <div className="text-center pt-4 border-t border-slate-800/60">
+          {modo === 'LOGIN' ? (
+            <p className="text-sm text-slate-400">¿No tienes cuenta? <button type="button" onClick={() => cambiarModo('REGISTER')} className="text-emerald-400 hover:text-emerald-300 font-semibold cursor-pointer transition-colors hover:underline">Registrarse como paciente</button></p>
+          ) : modo === 'REGISTER' ? (
+            <p className="text-sm text-slate-400">¿Ya tienes cuenta? <button type="button" onClick={() => cambiarModo('LOGIN')} className="text-blue-400 hover:text-blue-300 font-semibold cursor-pointer transition-colors hover:underline">Iniciar Sesión</button></p>
+          ) : null}
+        </div>
       </div>
-
-      {/* MODAL 1: SELECCIÓN DE PERFIL / ROL */}
-      {showRolesModal && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-sm space-y-4 text-white shadow-2xl">
-            <div className="text-center">
-              <h2 className="text-sm font-bold uppercase text-blue-400">Selecciona tu Rol de Acceso</h2>
-              <p className="text-xs text-slate-400 mt-1">Elige el perfil operativo con el que ingresarás al sistema</p>
-            </div>
-
-            <div className="space-y-2.5">
-              {perfilesDisponibles.map((perfil) => (
-                <button
-                  key={perfil.id}
-                  onClick={() => seleccionarPerfilRol(perfil)}
-                  className="w-full flex items-start gap-3 p-3 bg-slate-800/90 hover:bg-slate-700 border border-slate-700/80 rounded-xl text-left cursor-pointer transition-all hover:border-blue-500/50 group"
-                >
-                  <div className="w-8 h-8 rounded-full bg-blue-600 group-hover:bg-blue-500 flex items-center justify-center font-black text-xs shrink-0 mt-0.5">
-                    {perfil.avatar}
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold uppercase text-white group-hover:text-blue-300">{perfil.nombrePerfil}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{perfil.descripcion}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setShowRolesModal(false)}
-              className="w-full text-center text-xs text-slate-400 hover:text-white pt-2 cursor-pointer uppercase font-semibold"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 2: VINCULACIÓN Y ACCESO CON GOOGLE */}
-      {showGoogleModal && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-sm space-y-4 text-white shadow-2xl">
-            <div className="text-center">
-              <h2 className="text-sm font-bold uppercase text-white">Continuar con Google</h2>
-              <p className="text-xs text-slate-400 mt-1">Selecciona la cuenta para ingresar inmediatamente</p>
-            </div>
-
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => seleccionarCuentaGoogle('admin@ruzly.com')}
-                className="w-full p-3 bg-slate-800 hover:bg-slate-700 rounded-xl text-left cursor-pointer transition-colors border border-slate-700/50"
-              >
-                <p className="text-xs font-bold uppercase">Cuenta Principal Clínica</p>
-                <p className="text-[10px] text-slate-400">admin@ruzly.com</p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => seleccionarCuentaGoogle('finconflr@gmail.com')}
-                className="w-full p-3 bg-slate-800 hover:bg-slate-700 rounded-xl text-left cursor-pointer transition-colors border border-slate-700/50"
-              >
-                <p className="text-xs font-bold uppercase">Cuenta Personal</p>
-                <p className="text-[10px] text-slate-400">finconflr@gmail.com</p>
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setShowGoogleModal(false)}
-              className="w-full text-center text-xs text-slate-400 hover:text-white pt-2 cursor-pointer uppercase font-semibold"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }

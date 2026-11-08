@@ -34,6 +34,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# fotos clínicas subidas en tiempo de ejecución (datos de pacientes)
+/public/uploads/
+
 # vercel
 .vercel
 

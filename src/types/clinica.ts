@@ -1,7 +1,5 @@
-/**
- * Tipos compartidos del dominio clinico.
- * Deben reflejar exactamente la forma en que las rutas de /api responden.
- */
+// src/types/clinica.ts
+// Tipos compartidos del dominio clínico
 
 export interface Paciente {
   id: string;
@@ -11,6 +9,7 @@ export interface Paciente {
   email: string | null;
   ci: string | null;
   alergias: string | null;
+  activo: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -32,6 +31,7 @@ export interface Tratamiento {
   descripcion: string | null;
   costo: number;
   pagado: number;
+  activo: boolean;
   pacienteId: string | null;
   paciente?: Pick<Paciente, 'id' | 'nombre'> | null;
   createdAt: string;
@@ -39,7 +39,7 @@ export interface Tratamiento {
 
 export interface Receta {
   id: string;
-  medicamentos: string;
+  medicamento: string;  // ✅ Singular, como en la BD
   indicaciones: string | null;
   pacienteId: string;
   paciente?: Pick<Paciente, 'id' | 'nombre'>;
@@ -62,10 +62,34 @@ export interface Cobro {
   montoPagado: number;
   saldo: number;
   metodo: string;
+  pacienteId: string | null;
+  paciente?: Pick<Paciente, 'id' | 'nombre'> | null;
   createdAt: string;
 }
 
-/** Evento unificado del historial clinico de un paciente. */
+export interface Odontograma {
+  id: string;
+  pieza: string;
+  hallazgo: string;
+  estado: string;
+  observacion: string | null;
+  pacienteId: string;
+  paciente?: Pick<Paciente, 'id' | 'nombre'>;
+  createdAt: string;
+}
+
+export interface Usuario {
+  id: string;
+  username: string;
+  nombre: string;
+  email: string | null;
+  rol: 'ADMINISTRADOR' | 'ODONTOLOGO' | 'RECEPCIONISTA' | 'PACIENTE';
+  activo: boolean;
+  pacienteId: string | null;
+  createdAt: string;
+}
+
+/** Evento unificado del historial clínico de un paciente. */
 export interface EntradaHistorial {
   id: string;
   tipo: 'CITA' | 'TRATAMIENTO' | 'RECETA';
@@ -90,7 +114,7 @@ export interface PacienteDetalle {
   };
 }
 
-/** Envoltura estandar de error devuelta por la API. */
+/** Envoltura estándar de error devuelta por la API. */
 export interface ApiError {
   error: string;
 }
